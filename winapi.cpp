@@ -4,6 +4,7 @@
 #include <windowsx.h>
 #include "framework.h"
 #include "winapi.h"
+#include <stdio.h>
 
 #define MAX_LOADSTRING 100
 
@@ -19,12 +20,16 @@ int playerTurn = 1;
 int gameBoard[9] = { 0, 0, 0, 0, 0, 0, 0, 0, 0 };
 int winner = 0;
 int wins[3];
+int debug = 0;
+HWND exportButton, inportButton;
 
 // Forward declarations of functions included in this code module:
 ATOM                MyRegisterClass(HINSTANCE hInstance);
 BOOL                InitInstance(HINSTANCE, int);
 LRESULT CALLBACK    WndProc(HWND, UINT, WPARAM, LPARAM);
 INT_PTR CALLBACK    About(HWND, UINT, WPARAM, LPARAM);
+INT_PTR CALLBACK    Export(HWND, UINT, WPARAM, LPARAM);
+INT_PTR CALLBACK    Inport(HWND, UINT, WPARAM, LPARAM);
 
 int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
                      _In_opt_ HINSTANCE hPrevInstance,
@@ -276,6 +281,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			hbr2 = CreateSolidBrush(RGB(0, 0, 255));
 			hIcon1 = LoadIcon(hInst, MAKEINTRESOURCE(IDI_PLAYER1));
 			hIcon2 = LoadIcon(hInst, MAKEINTRESOURCE(IDI_PLAYER2));
+
 		}
 		break;
     case WM_COMMAND:
@@ -284,6 +290,19 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
             // Parse the menu selections:
             switch (wmId)
             {
+			case ID_FILE_EXPORT:
+			{
+				DialogBox(hInst, MAKEINTRESOURCE(IDD_FILE_NAME), hWnd, Export);
+			}
+			break;
+			case ID_FILE_INPORT:
+			{
+				DialogBox(hInst, MAKEINTRESOURCE(IDD_FILE_NAME), hWnd, Inport);
+				showTurn(hWnd, GetDC(hWnd));
+				InvalidateRect(hWnd, NULL, TRUE); // adds WM_PAINT to msg queue
+				UpdateWindow(hWnd); // forces WM_PAINT
+			}
+			break;
 			case ID_FILE_NEWGAME:
 			{
 				int result = MessageBox(hWnd, L"Do you want to start a new game?", L"New Game", MB_YESNO | MB_ICONQUESTION);
@@ -372,8 +391,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		{
 			MINMAXINFO* pMinMax = (MINMAXINFO*)lParam;
 
-			pMinMax->ptMinTrackSize.x = CELL_SIZE * 5;
-			pMinMax->ptMinTrackSize.y = CELL_SIZE * 5;
+			pMinMax->ptMinTrackSize.x = CELL_SIZE * 8;
+			pMinMax->ptMinTrackSize.y = CELL_SIZE * 8;
 
 		}
 		break;
@@ -400,6 +419,34 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 					DrawIcon(hdc, rcClient.right - 64, 32, hIcon2);
 
 					showTurn(hWnd, hdc);
+					
+					DestroyWindow(exportButton);
+					exportButton = CreateWindowW(
+						L"BUTTON",  // Predefined class; Unicode assumed 
+						L"Export results",      // Button text 
+						WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_DEFPUSHBUTTON,  // Styles 
+						rcClient.right / 6 - 140,         // x position 
+						rcClient.bottom - 350,         // y position 
+						200,        // Button width
+						35,        // Button height
+						hWnd,     // Parent window
+						(HMENU)ID_FILE_EXPORT,      
+						(HINSTANCE)GetWindowLong(hWnd, GWL_HINSTANCE),
+						NULL);      // Pointer not needed. 
+					DestroyWindow(inportButton);
+					inportButton = CreateWindowW(
+						L"BUTTON",  // Predefined class; Unicode assumed 
+						L"Import results",      // Button text 
+						WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_DEFPUSHBUTTON,  // Styles 
+						rcClient.right / 6 - 140,         // x position 
+						rcClient.bottom - 300,         // y position 
+						200,        // Button width
+						35,        // Button height
+						hWnd,     // Parent window
+						(HMENU)ID_FILE_INPORT,
+						(HINSTANCE)GetWindowLong(hWnd, GWL_HINSTANCE),
+						NULL);      // Pointer not needed. 
+					
 				}
 
 				FillRect(hdc, &rc, (HBRUSH)GetStockObject(WHITE_BRUSH));  //no borders
@@ -423,6 +470,10 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 					//FillRect(hdc, &rcCell, gameBoard[i] == 2 ? hbr2 : hbr1);
 					DrawIconCentered(hdc, &rcCell, gameBoard[i] == 1 ? hIcon1 : hIcon2);
 				}
+			}
+			if (debug == 1)
+			{
+				OutputDebugStringA("\n");
 			}
 
 			if (winner == 1 || winner == 2)
@@ -474,3 +525,159 @@ INT_PTR CALLBACK About(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
     }
     return (INT_PTR)FALSE;
 }
+
+void WriteToFile(TCHAR lpszFileName[]) 
+{
+	FILE* fp;
+
+	char output[10];
+	output[0] = playerTurn + '0';
+	for (int i = 0; i < 9; i++)
+	{
+		output[i + 1] = gameBoard[i] + '0';
+	}
+
+	fp = _tfopen(lpszFileName, TEXT("wb"));
+	fwrite(output, sizeof(char), sizeof(output), fp);
+	fclose(fp);
+}
+
+char* ReadFromFile(TCHAR lpszFileName[], char* output) 
+{
+	FILE* fp;
+
+	fp = _tfopen(lpszFileName, TEXT("rb"));
+	fgets(output, 11, fp);
+	fclose(fp);
+
+	return output;
+}
+
+void ResetGame(char* data)
+{
+	winner = 0;
+	ZeroMemory(wins, sizeof(wins));
+	playerTurn = data[0] - '0';
+	for (int i = 0; i < 9; i++)
+	{
+		gameBoard[i] = data[i + 1] - '0';
+	}
+}
+
+INT_PTR CALLBACK Export(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
+{
+	TCHAR lpszFileName[32];
+	WORD cchFileName;
+
+	UNREFERENCED_PARAMETER(lParam);
+	switch (message)
+	{
+	case WM_INITDIALOG:
+		return (INT_PTR)TRUE;
+
+	case WM_COMMAND:
+		if (LOWORD(wParam) == IDCANCEL)
+		{
+			EndDialog(hDlg, LOWORD(wParam));
+			return (INT_PTR)TRUE;
+		}
+		switch (wParam)
+		{
+			case IDOK:
+			{
+				cchFileName = (WORD)SendDlgItemMessage(hDlg,
+					IDC_EDIT1,
+					EM_LINELENGTH,
+					(WPARAM)0,
+					(LPARAM)0);
+
+				// Put the number of characters into first word of buffer. 
+				*((LPWORD)lpszFileName) = cchFileName;
+
+				// Get the characters. 
+				SendDlgItemMessage(hDlg,
+					IDC_EDIT1,
+					EM_GETLINE,
+					(WPARAM)0,       // line 0 
+					(LPARAM)lpszFileName);
+
+				// Null-terminate the string. 
+				lpszFileName[cchFileName] = 0;
+
+				WriteToFile(lpszFileName);
+
+				MessageBox(hDlg,
+					L"Success",
+					L"Success",
+					MB_OK);
+
+				EndDialog(hDlg, LOWORD(wParam));
+				return (INT_PTR)TRUE;
+			}
+			break;
+		}
+		break;
+	}
+	return (INT_PTR)FALSE;
+}
+
+INT_PTR CALLBACK Inport(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
+{
+	TCHAR lpszFileName[32];
+	WORD cchFileName;
+
+	UNREFERENCED_PARAMETER(lParam);
+	switch (message)
+	{
+	case WM_INITDIALOG:
+		return (INT_PTR)TRUE;
+
+	case WM_COMMAND:
+		if (LOWORD(wParam) == IDCANCEL)
+		{
+			EndDialog(hDlg, LOWORD(wParam));
+			return (INT_PTR)TRUE;
+		}
+		switch (wParam)
+		{
+		case IDOK:
+		{
+			cchFileName = (WORD)SendDlgItemMessage(hDlg,
+				IDC_EDIT1,
+				EM_LINELENGTH,
+				(WPARAM)0,
+				(LPARAM)0);
+
+			// Put the number of characters into first word of buffer. 
+			*((LPWORD)lpszFileName) = cchFileName;
+
+			// Get the characters. 
+			SendDlgItemMessage(hDlg,
+				IDC_EDIT1,
+				EM_GETLINE,
+				(WPARAM)0,       // line 0 
+				(LPARAM)lpszFileName);
+
+			// Null-terminate the string. 
+			lpszFileName[cchFileName] = 0;
+
+			char data[11]; 
+			ReadFromFile(lpszFileName, data);
+
+			ResetGame(data);
+
+			MessageBox(hDlg,
+				L"Success",
+				L"Success",
+				MB_OK);
+
+			EndDialog(hDlg, LOWORD(wParam));
+			return (INT_PTR)TRUE;
+		}
+		break;
+		}
+		break;
+	}
+	return (INT_PTR)FALSE;
+}
+
