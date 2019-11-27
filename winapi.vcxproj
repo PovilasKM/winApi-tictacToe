@@ -163,11 +163,14 @@
     <ResourceCompile Include="winapi.rc" />
   </ItemGroup>
   <ItemGroup>
+    <Image Include="icon1.ico" />
     <Image Include="icon2.ico" />
     <Image Include="O.ico" />
+    <Image Include="O_fancy.ico" />
     <Image Include="small.ico" />
     <Image Include="winapi.ico" />
     <Image Include="X.ico" />
+    <Image Include="X_fancy.ico" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

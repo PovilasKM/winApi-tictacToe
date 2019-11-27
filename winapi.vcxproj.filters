@@ -54,5 +54,14 @@
     <Image Include="O.ico">
       <Filter>Resource Files</Filter>
     </Image>
+    <Image Include="icon1.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="O_fancy.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="X_fancy.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
   </ItemGroup>
 </Project>

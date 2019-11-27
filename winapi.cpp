@@ -20,7 +20,7 @@ int playerTurn = 1;
 int gameBoard[9] = { 0, 0, 0, 0, 0, 0, 0, 0, 0 };
 int winner = 0;
 int wins[3];
-int debug = 0;
+int fancyIcons = 0;
 HWND exportButton, inportButton;
 
 // Forward declarations of functions included in this code module:
@@ -271,17 +271,33 @@ void DrawIconCentered(HDC hdc, RECT* pRect, HICON hIcon)
 	}
 }
 
+void changeIcons(HWND hWnd)
+{
+	DestroyIcon(hIcon1);
+	DestroyIcon(hIcon2);
+	if (fancyIcons == 0)
+	{
+		hIcon1 = LoadIcon(hInst, MAKEINTRESOURCE(IDI_PLAYER1));
+		hIcon2 = LoadIcon(hInst, MAKEINTRESOURCE(IDI_PLAYER2));
+	}
+	else
+	{
+		hIcon1 = LoadIcon(hInst, MAKEINTRESOURCE(IDI_PLAYER1_2));
+		hIcon2 = LoadIcon(hInst, MAKEINTRESOURCE(IDI_PLAYER2_2));
+	}
+	InvalidateRect(hWnd, NULL, TRUE); // adds WM_PAINT to msg queue
+	UpdateWindow(hWnd); // forces WM_PAINT
+}
+
 LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
     switch (message)
     {
-	case WM_CREATE : 
+	case WM_CREATE :
 		{
 			hbr1 = CreateSolidBrush(RGB(255, 0, 0));
 			hbr2 = CreateSolidBrush(RGB(0, 0, 255));
-			hIcon1 = LoadIcon(hInst, MAKEINTRESOURCE(IDI_PLAYER1));
-			hIcon2 = LoadIcon(hInst, MAKEINTRESOURCE(IDI_PLAYER2));
-
+			changeIcons(hWnd);
 		}
 		break;
     case WM_COMMAND:
@@ -309,10 +325,24 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 				if (result == IDYES)
 				{
 					playerTurn = 1;
+					winner = 0;
 					ZeroMemory(gameBoard, sizeof(gameBoard));
+					ZeroMemory(wins, sizeof(wins));
 					InvalidateRect(hWnd, NULL, TRUE); // adds WM_PAINT to msg queue
 					UpdateWindow(hWnd); // forces WM_PAINT
 				}
+			}
+			break;
+			case ID_CHANGEICONS_REGULAR:
+			{
+				fancyIcons = 0;
+				changeIcons(hWnd);
+			}
+			break;
+			case ID_CHANGEICONS_FANCY:
+			{
+				fancyIcons = 1;
+				changeIcons(hWnd);
 			}
 			break;
             case IDM_ABOUT:
@@ -467,15 +497,11 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			{
 				if (gameBoard[i] != 0 && GetCellRect(hWnd, i, &rcCell)) 
 				{
-					//FillRect(hdc, &rcCell, gameBoard[i] == 2 ? hbr2 : hbr1);
 					DrawIconCentered(hdc, &rcCell, gameBoard[i] == 1 ? hIcon1 : hIcon2);
 				}
 			}
-			if (debug == 1)
-			{
-				OutputDebugStringA("\n");
-			}
 
+			//paint winner move
 			if (winner == 1 || winner == 2)
 			{
 				RECT rcWin;
@@ -542,15 +568,32 @@ void WriteToFile(TCHAR lpszFileName[])
 	fclose(fp);
 }
 
-char* ReadFromFile(TCHAR lpszFileName[], char* output) 
+BOOL fileExists(TCHAR* file)
 {
+	WIN32_FIND_DATA FindFileData;
+	HANDLE handle = FindFirstFile(file, &FindFileData);
+	BOOL found = handle != INVALID_HANDLE_VALUE;
+	if (found)
+	{
+		FindClose(handle);
+	}
+	return found;
+}
+
+BOOL ReadFromFile(TCHAR lpszFileName[], char* output) 
+{
+	if (!fileExists(lpszFileName))
+	{
+		return FALSE;
+	}
+
 	FILE* fp;
 
 	fp = _tfopen(lpszFileName, TEXT("rb"));
 	fgets(output, 11, fp);
 	fclose(fp);
 
-	return output;
+	return TRUE;
 }
 
 void ResetGame(char* data)
@@ -662,14 +705,21 @@ INT_PTR CALLBACK Inport(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
 			lpszFileName[cchFileName] = 0;
 
 			char data[11]; 
-			ReadFromFile(lpszFileName, data);
-
-			ResetGame(data);
-
-			MessageBox(hDlg,
-				L"Success",
-				L"Success",
-				MB_OK);
+			if (ReadFromFile(lpszFileName, data))
+			{
+				MessageBox(hDlg,
+					L"Success",
+					L"Success",
+					MB_OK);
+				ResetGame(data);
+			}
+			else
+			{
+				MessageBox(hDlg,
+					L"Error reading from file",
+					L"Error reading from file",
+					MB_OK);
+			}
 
 			EndDialog(hDlg, LOWORD(wParam));
 			return (INT_PTR)TRUE;
